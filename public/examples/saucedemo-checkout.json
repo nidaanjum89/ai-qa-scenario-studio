@@ -1,0 +1,12 @@
+{
+  "product": "SauceDemo sample shop",
+  "url": "https://www.saucedemo.com/",
+  "feature": "Checkout a selected product",
+  "story": "As a shopper, I want to check out a selected product so that I can complete a purchase and see an order confirmation.",
+  "criteria": [
+    "AC-01 | The cart shows each selected product with the same name and price as the inventory page.",
+    "AC-02 | Checkout cannot continue when First Name, Last Name, or Postal Code is empty; a visible field-level error is shown.",
+    "AC-03 | The checkout overview shows the item subtotal, tax, and total; total equals subtotal plus tax.",
+    "AC-04 | Finishing a valid order shows a visible order-complete confirmation."
+  ]
+}
