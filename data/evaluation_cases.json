@@ -1,0 +1,27 @@
+[
+  {
+    "name": "specific cart behavior",
+    "input": {"product": "Sample Shop", "feature": "Cart", "story": "As a shopper, I want my selected items in a cart.", "criteria": ["AC-01 | The cart displays the name and unit price of each selected item."]},
+    "expectedAmbiguousIds": []
+  },
+  {
+    "name": "vague quality word",
+    "input": {"product": "Sample Shop", "feature": "Search", "story": "As a visitor, I want search results.", "criteria": ["AC-01 | Search should return results quickly."]},
+    "expectedAmbiguousIds": ["AC-01"]
+  },
+  {
+    "name": "underspecified validation",
+    "input": {"product": "Sample Shop", "feature": "Checkout", "story": "As a buyer, I enter delivery data.", "criteria": ["AC-01 | Required fields are validated."]},
+    "expectedAmbiguousIds": ["AC-01"]
+  },
+  {
+    "name": "unspecified money calculation",
+    "input": {"product": "Sample Shop", "feature": "Payment summary", "story": "As a buyer, I review the price.", "criteria": ["AC-01 | The tax and total are shown."]},
+    "expectedAmbiguousIds": ["AC-01"]
+  },
+  {
+    "name": "clear confirmation",
+    "input": {"product": "Sample Shop", "feature": "Order status", "story": "As a buyer, I finish my purchase.", "criteria": ["AC-01 | After placing an order, a page displays the text Order confirmed."]},
+    "expectedAmbiguousIds": []
+  }
+]
