@@ -47,6 +47,24 @@
             <div><span class="step-label">01 / THE BRIEF</span><h2>Set the scene</h2></div>
             <button class="text-button" id="load-example" type="button">Load example <span>↗</span></button>
           </div>
+          <section class="memory-panel" aria-label="Project memory">
+            <div class="memory-heading">
+              <div><span class="step-label">PROJECT MEMORY</span><label class="sr-only" for="project-select">Saved project</label><select id="project-select" class="memory-select"></select></div>
+              <button class="text-button" id="show-new-project" type="button">New project</button>
+            </div>
+            <div class="memory-create" id="new-project-form" hidden>
+              <label class="sr-only" for="new-project-name">New project name</label>
+              <input id="new-project-name" maxlength="80" placeholder="Project name">
+              <button class="memory-small-button" id="create-project" type="button">Create</button>
+            </div>
+            <div class="memory-actions">
+              <button class="memory-small-button" id="export-memory" type="button">Export project</button>
+              <button class="memory-small-button" id="import-memory-button" type="button">Import project</button>
+              <input id="import-memory-file" type="file" accept="application/json,.json" hidden>
+            </div>
+            <p class="memory-note">Saved on this computer. Export the project file to move or share it.</p>
+            <div class="memory-history" id="memory-history" aria-live="polite"><span>Loading saved plans…</span></div>
+          </section>
           <form id="brief-form">
             <label for="product">Product or website</label>
             <input id="product" name="product" value="SauceDemo sample shop" maxlength="120" autocomplete="off">
@@ -58,7 +76,7 @@
             <textarea id="story" name="story" rows="3" maxlength="2000" placeholder="As a shopper, I want…" required>As a shopper, I want to check out a selected product so that I can complete a purchase and see an order confirmation.</textarea>
             <div class="criteria-label-row"><label for="criteria">Acceptance criteria</label><span>one per line · add AC-01 | to name it</span></div>
             <textarea id="criteria" name="criteria" rows="8" placeholder="AC-01 | The cart shows…" required></textarea>
-            <div class="privacy-note"><span class="lock-icon">◇</span><span><strong>Keep it synthetic.</strong> Don’t paste employer, customer, or personal data. Inputs aren’t saved by this app.</span></div>
+            <div class="privacy-note"><span class="lock-icon">◇</span><span><strong>Save project work safely.</strong> Plans and reviews are saved in the selected project on this computer. Only use information you are allowed to store here.</span></div>
             <button class="generate-button" type="submit"><span>Generate QA artifacts</span><span class="button-icon">↗</span></button>
             <div class="engine-caption" id="engine-caption">Local rules mode · no API key needed</div>
           </form>

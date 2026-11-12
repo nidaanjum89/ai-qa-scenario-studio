@@ -1,4 +1,4 @@
-const state = { result: null, tab: "overview", reviews: {}, busy: false };
+const state = { result: null, tab: "overview", reviews: {}, busy: false, currentRunId: null, currentProjectId: localStorage.getItem("scenarioStudioProject") || "" };
 const $ = (selector) => document.querySelector(selector);
 const form = $("#brief-form");
 const criteriaInput = $("#criteria");
@@ -8,7 +8,81 @@ let toastTimer;
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#39;"}[c])); }
 function notify(message) { const toast = $("#toast"); toast.textContent = message; toast.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 2200); }
 function criteriaLines() { return criteriaInput.value.split("\n").map((line) => line.trim()).filter(Boolean); }
-function inputPayload() { return {product: $("#product").value, url: $("#url").value, feature: $("#feature").value, story: $("#story").value, criteria: criteriaLines()}; }
+function inputPayload() { return {projectId: state.currentProjectId, product: $("#product").value, url: $("#url").value, feature: $("#feature").value, story: $("#story").value, criteria: criteriaLines()}; }
+
+async function loadProjects(preferredId = "") {
+  const response = await fetch("/api/projects");
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not load saved projects.");
+  const select = $("#project-select");
+  select.innerHTML = data.projects.map((project) => `<option value="${esc(project.id)}">${esc(project.name)}</option>`).join("");
+  const wanted = preferredId || state.currentProjectId;
+  state.currentProjectId = data.projects.some((project) => project.id === wanted) ? wanted : data.projects[0]?.id || "";
+  select.value = state.currentProjectId;
+  if (state.currentProjectId) localStorage.setItem("scenarioStudioProject", state.currentProjectId);
+  await loadHistory();
+}
+
+async function loadHistory() {
+  if (!state.currentProjectId) return;
+  const response = await fetch(`/api/projects/${encodeURIComponent(state.currentProjectId)}/runs`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not load saved plans.");
+  const history = $("#memory-history");
+  if (!data.runs.length) { history.innerHTML = "<span>No saved plans yet. Generate a plan to start project memory.</span>"; return; }
+  history.innerHTML = data.runs.map((run) => `<button type="button" class="history-item" data-run-id="${esc(run.runId)}"><span class="history-title">v${run.version} · ${esc(run.feature)}</span><span class="history-meta">${run.coverage}% · ${run.reviewedCount} reviewed</span></button>`).join("");
+}
+
+function clearCurrentResult() {
+  state.result = null; state.reviews = {}; state.currentRunId = null; state.tab = "overview";
+  $("#results-title").textContent = "Your reviewable output";
+  $("#copy-output").disabled = true; $("#export-output").disabled = true;
+  output.innerHTML = `<div class="empty-state"><div class="empty-icon">✳</div><h3>Make the requirements testable.</h3><p>Start with the sample or enter a synthetic story. Saved plans stay in the selected project.</p><div class="empty-flow"><span>Story</span><b>→</b><span>Scenarios</span><b>→</b><span>Saved memory</span></div></div>`;
+}
+
+async function loadRun(runId) {
+  const response = await fetch(`/api/runs/${encodeURIComponent(runId)}`);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not open this saved plan.");
+  state.currentRunId = data.runId; state.currentProjectId = data.projectId; state.result = data.result;
+  state.reviews = Object.fromEntries(data.result.criteria.map((criterion) => [criterion.id, data.reviews[criterion.id] || "pending"]));
+  for (const key of ["product", "url", "feature", "story"]) $("#" + key).value = data.payload[key] || "";
+  criteriaInput.value = data.payload.criteria.map((criterion) => typeof criterion === "string" ? criterion : `${criterion.id} | ${criterion.text}`).join("\n");
+  $("#results-title").textContent = data.result.feature;
+  $("#copy-output").disabled = false; $("#export-output").disabled = false;
+  updateMetrics(); setTab("overview"); render();
+  notify(`Opened saved plan v${data.version}`);
+}
+
+async function createProject() {
+  const name = $("#new-project-name").value.trim();
+  if (!name) { notify("Enter a project name first."); return; }
+  const response = await fetch("/api/projects", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not create the project.");
+  $("#new-project-name").value = ""; $("#new-project-form").hidden = true;
+  clearCurrentResult(); await loadProjects(data.project.id); notify("Project created and saved on this computer");
+}
+
+async function exportMemory() {
+  if (!state.currentProjectId) return;
+  const response = await fetch(`/api/projects/${encodeURIComponent(state.currentProjectId)}/export`);
+  const bundle = await response.json();
+  if (!response.ok) throw new Error(bundle.error || "Could not export project memory.");
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob); const a = document.createElement("a");
+  a.href = url; a.download = `${bundle.project.name.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-memory.json`; a.click(); URL.revokeObjectURL(url);
+  notify("Project memory exported");
+}
+
+async function importMemory(file) {
+  if (!file) return;
+  const bundle = JSON.parse(await file.text());
+  const response = await fetch("/api/projects/import", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(bundle)});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Could not import this project file.");
+  clearCurrentResult(); await loadProjects(data.project.id); notify("Project memory imported");
+}
 
 async function loadExample() {
   const response = await fetch("/examples/saucedemo-checkout.json");
@@ -23,7 +97,7 @@ async function refreshStatus() {
   try {
     const response = await fetch("/api/status"); const info = await response.json();
     $("#engine-status").textContent = info.aiConfigured ? "AI + GUARDRAILS" : "LOCAL DEMO";
-    $("#engine-caption").textContent = info.aiConfigured ? "AI suggestions enabled · traceability guarded locally" : "Local rules mode · no API key needed";
+    $("#engine-caption").textContent = info.aiConfigured ? "AI mode sends this brief and approved project examples to OpenAI." : "Local rules mode · saved project stays on this computer";
     $(".pulse-dot").style.background = info.aiConfigured ? "#8978bd" : "#54a982";
   } catch { $("#engine-status").textContent = "LOCAL DEMO"; }
 }
@@ -32,17 +106,19 @@ async function generate(event) {
   event.preventDefault();
   if (state.busy) return;
   const payload = inputPayload();
+  if (!payload.projectId) { notify("Choose a project before generating."); return; }
   if (!payload.story.trim() || !payload.criteria.length) { notify("Add a user story and at least one acceptance criterion."); return; }
   setBusy(true);
   try {
     const response = await fetch("/api/generate", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Generation failed.");
-    state.result = result; state.reviews = Object.fromEntries(result.criteria.map((c) => [c.id, "pending"])); state.tab = "overview";
+    state.result = result; state.currentRunId = result.memory?.runId || null; state.reviews = Object.fromEntries(result.criteria.map((c) => [c.id, "pending"])); state.tab = "overview";
     $("#results-title").textContent = result.feature;
     $("#copy-output").disabled = false; $("#export-output").disabled = false;
     updateMetrics(); setTab("overview"); render();
-    if (result.aiWarning) notify(result.aiWarning); else notify("Drafts generated — review the flags before automation.");
+    await loadHistory();
+    if (result.aiWarning) notify(result.aiWarning); else notify(`Plan saved as v${result.memory.version}`);
   } catch (error) { notify(error.message); }
   finally { setBusy(false); }
 }
@@ -76,7 +152,7 @@ function renderOverview(r) {
 function renderReview(r) {
   const statuses = Object.values(state.reviews); const approved = statuses.filter(x=>x==="approved").length; const changes=statuses.filter(x=>x==="changes").length;
   const rows = r.traceability.map((t) => { const status = state.reviews[t.criterionId] || "pending"; return `<div class="trace-row"><span class="trace-id">${esc(t.criterionId)}</span><div><p>${esc(t.criterion)}</p><small>Mapped to ${t.scenarioIds.map(esc).join(", ") || "no scenario"}</small></div><div class="review-controls"><button type="button" class="review-button ${status==="approved"?"selected":""}" data-review-id="${esc(t.criterionId)}" data-review-status="approved">Reviewed</button><button type="button" class="review-button ${status==="changes"?"selected changes":""}" data-review-id="${esc(t.criterionId)}" data-review-status="changes">Needs changes</button></div></div>`; }).join("");
-  return `<div class="notice">Mark each criterion after checking expected behavior and the mapped scenario. These decisions live only in this page session; they are not sent to the server or saved.</div><div class="review-summary"><span>${approved} reviewed</span><span>${changes} needs changes</span><span>${statuses.length-approved-changes} pending</span></div><div class="trace-list">${rows}</div>`;
+  return `<div class="notice">Mark each criterion after checking expected behavior and the mapped scenario. Your review choices are saved with this plan on this computer.</div><div class="review-summary"><span>${approved} reviewed</span><span>${changes} needs changes</span><span>${statuses.length-approved-changes} pending</span></div><div class="trace-list">${rows}</div>`;
 }
 function currentText() {
   if (!state.result) return ""; const r = state.result;
@@ -109,9 +185,35 @@ async function showEvaluation() {
 form.addEventListener("submit", generate);
 $("#load-example").addEventListener("click", () => loadExample().catch((error)=>notify(error.message)));
 document.querySelectorAll(".tab").forEach((button) => button.addEventListener("click", () => { state.tab=button.dataset.tab; setTab(state.tab); render(); }));
-output.addEventListener("click", (event) => { const button=event.target.closest("[data-review-id]"); if (!button) return; state.reviews[button.dataset.reviewId]=button.dataset.reviewStatus; render(); });
+output.addEventListener("click", async (event) => {
+  const reviewButton = event.target.closest("[data-review-id]");
+  if (reviewButton) {
+    state.reviews[reviewButton.dataset.reviewId] = reviewButton.dataset.reviewStatus; render();
+    if (state.currentRunId) {
+      try {
+        const response = await fetch(`/api/runs/${encodeURIComponent(state.currentRunId)}/reviews`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({reviews:state.reviews})});
+        const data = await response.json(); if (!response.ok) throw new Error(data.error || "Review could not be saved.");
+        await loadHistory();
+      } catch (error) { notify(`Review was not saved: ${error.message}`); }
+    }
+    return;
+  }
+  const historyButton = event.target.closest("[data-run-id]");
+  if (historyButton) loadRun(historyButton.dataset.runId).catch((error)=>notify(error.message));
+});
+$("#project-select").addEventListener("change", async (event) => {
+  state.currentProjectId = event.target.value; localStorage.setItem("scenarioStudioProject", state.currentProjectId);
+  clearCurrentResult();
+  try { await loadHistory(); } catch (error) { notify(error.message); }
+});
+$("#show-new-project").addEventListener("click", () => { $("#new-project-form").hidden = !$("#new-project-form").hidden; if (!$("#new-project-form").hidden) $("#new-project-name").focus(); });
+$("#create-project").addEventListener("click", () => createProject().catch((error)=>notify(error.message)));
+$("#new-project-name").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); createProject().catch((error)=>notify(error.message)); } });
+$("#export-memory").addEventListener("click", () => exportMemory().catch((error)=>notify(error.message)));
+$("#import-memory-button").addEventListener("click", () => $("#import-memory-file").click());
+$("#import-memory-file").addEventListener("change", (event) => importMemory(event.target.files[0]).catch((error)=>notify(error.message)).finally(() => { event.target.value = ""; }));
 $("#copy-output").addEventListener("click", copyOutput); $("#export-output").addEventListener("click", exportOutput);
 $("#evaluation-link").addEventListener("click", showEvaluation); $("#close-evaluation").addEventListener("click", () => $("#evaluation-modal").hidden=true);
 $("#evaluation-modal").addEventListener("click", (event) => { if (event.target === $("#evaluation-modal")) $("#evaluation-modal").hidden=true; });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") $("#evaluation-modal").hidden=true; });
-loadExample().catch(()=>{}); refreshStatus();
+loadExample().catch(()=>{}); loadProjects().catch((error)=>notify(error.message)); refreshStatus();
