@@ -72,7 +72,7 @@ async function exportMemory() {
   const blob = new Blob([JSON.stringify(bundle, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob); const a = document.createElement("a");
   a.href = url; a.download = `${bundle.project.name.toLowerCase().replace(/[^a-z0-9]+/g,"-")}-memory.json`; a.click(); URL.revokeObjectURL(url);
-  notify("Project memory exported");
+  notify("Saved plans backup downloaded");
 }
 
 async function importMemory(file) {
@@ -81,7 +81,7 @@ async function importMemory(file) {
   const response = await fetch("/api/projects/import", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(bundle)});
   const data = await response.json();
   if (!response.ok) throw new Error(data.error || "Could not import this project file.");
-  clearCurrentResult(); await loadProjects(data.project.id); notify("Project memory imported");
+  clearCurrentResult(); await loadProjects(data.project.id); notify("Backup loaded as a new project");
 }
 
 async function loadExample() {
@@ -173,7 +173,7 @@ function markdown(r) {
   return lines.join("\n");
 }
 async function copyOutput() { const value = currentText(); if (!value) return; try { await navigator.clipboard.writeText(value); notify("Copied to clipboard"); } catch { notify("Clipboard access is not available in this browser."); } }
-function exportOutput() { if (!state.result) return; const blob = new Blob([markdown(state.result)], {type:"text/markdown;charset=utf-8"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="qa-scenario-draft.md"; a.click(); URL.revokeObjectURL(url); notify("Markdown export downloaded"); }
+function exportOutput() { if (!state.result) return; const blob = new Blob([markdown(state.result)], {type:"text/markdown;charset=utf-8"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="qa-scenario-draft.md"; a.click(); URL.revokeObjectURL(url); notify("Plan and code downloaded"); }
 async function showEvaluation() {
   const modal = $("#evaluation-modal"); modal.hidden=false; $("#evaluation-content").innerHTML='<div class="loading-line">Loading checks…</div>';
   try { const response=await fetch("/api/evaluate"); const data=await response.json(); if (!response.ok) throw new Error("Evaluation unavailable");

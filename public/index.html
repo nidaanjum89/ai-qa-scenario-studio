@@ -58,11 +58,11 @@
               <button class="memory-small-button" id="create-project" type="button">Create</button>
             </div>
             <div class="memory-actions">
-              <button class="memory-small-button" id="export-memory" type="button">Export project</button>
-              <button class="memory-small-button" id="import-memory-button" type="button">Import project</button>
+              <button class="memory-small-button" id="export-memory" type="button">Back up plans</button>
+              <button class="memory-small-button" id="import-memory-button" type="button">Load backup</button>
               <input id="import-memory-file" type="file" accept="application/json,.json" hidden>
             </div>
-            <p class="memory-note">Saved on this computer. Export the project file to move or share it.</p>
+            <p class="memory-note">Backup saves every plan and review in this project. Loading one makes a new project copy. Use “Download plan + code” for one readable plan.</p>
             <div class="memory-history" id="memory-history" aria-live="polite"><span>Loading saved plans…</span></div>
           </section>
           <form id="brief-form">
@@ -85,7 +85,7 @@
         <section class="results-panel" aria-live="polite" aria-label="Generated QA artifacts">
           <div class="results-top">
             <div><span class="step-label">02 / THE TEST PLAN</span><h2 id="results-title">Your reviewable output</h2></div>
-            <div class="result-actions"><button class="icon-button" id="copy-output" type="button" disabled title="Copy current tab">⧉<span class="sr-only">Copy output</span></button><button class="export-button" id="export-output" type="button" disabled>Export .md <span>↓</span></button></div>
+            <div class="result-actions"><button class="icon-button" id="copy-output" type="button" disabled title="Copy current tab">⧉<span class="sr-only">Copy output</span></button><button class="export-button" id="export-output" type="button" disabled>Download plan + code <span>↓</span></button></div>
           </div>
           <div class="metric-strip" id="metrics">
             <div class="metric"><span class="metric-label">CRITERIA COVERED</span><strong>—<small>%</small></strong><span class="metric-foot">traceability</span></div>
