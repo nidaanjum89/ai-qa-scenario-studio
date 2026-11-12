@@ -20,6 +20,7 @@ def generate_additional_scenarios(
     payload: dict[str, Any],
     criteria: list[dict[str, str]],
     project_memory: list[dict[str, Any]] | None = None,
+    existing_scenarios: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -30,16 +31,25 @@ def generate_additional_scenarios(
         "feature": payload.get("feature"),
         "story": payload.get("story"),
         "criteria": criteria,
+        "scenarios_already_in_the_local_plan": [
+            {key: scenario.get(key) for key in ("title", "kind", "expectedResult")}
+            for scenario in (existing_scenarios or [])[:12]
+        ],
         "approved_examples_from_this_project": (project_memory or [])[:8],
     }
     prompt = (
-        "You are a careful QA analyst. Suggest up to 4 additional edge, negative, boundary, accessibility, or security scenarios "
-        "that add value beyond one baseline test per acceptance criterion. Use only synthetic data. Never invent product behavior as fact. "
+        "You are a creative but careful QA analyst. Suggest up to 4 additional scenarios that add value beyond the local plan. "
+        "Do not repeat or lightly reword any scenario in scenarios_already_in_the_local_plan. "
+        "Look for one realistic happy path, useful positive variations, negative cases, and boundary or edge cases where relevant. "
+        "Consider realistic user mistakes, missing or unclear data, interrupted actions, repeated actions, and unusual but plausible inputs. "
+        "Do not force irrelevant security or accessibility cases. Use only synthetic data. Never invent product behavior as fact. "
         "Each scenario must map to one or more supplied criterion IDs. Keep the output concise and return JSON only with this shape: "
         '{"additionalScenarios":[{"title":"...","acceptanceIds":["AC-01"],"kind":"boundary","preconditions":["..."],"steps":["..."],"expectedResult":"...","rationale":"..."}]}. '
         "Approved examples from this project may guide style and useful coverage, but they are not proof of current product behavior. "
-        "Do not copy an old example unless it fits the current criteria. Do not include a scenario if its expected result cannot be grounded "
-        "in the current supplied criteria; instead formulate a question in rationale."
+        "Do not copy an old example unless it fits the current criteria. Keep each case specific, with practical steps and a checkable result. "
+        "Do not include a scenario if its expected result cannot be grounded in the current supplied criteria; instead mark it exploratory "
+        "and put the missing product decision in rationale. Use kind values: happy path, positive, negative, edge case, boundary, "
+        "security, accessibility, or exploratory. Avoid repeating the same flow with different wording."
     )
     body = json.dumps({"model": model, "store": False, "max_output_tokens": 1800,
                        "input": [{"role": "system", "content": prompt}, {"role": "user", "content": json.dumps(input_data, ensure_ascii=False)}]}, ensure_ascii=False).encode("utf-8")

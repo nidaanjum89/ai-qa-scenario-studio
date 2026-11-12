@@ -127,14 +127,20 @@ class Handler(BaseHTTPRequestHandler):
             engine = "Local rules demo"
             warning = None
             memory_examples = []
+            result = build_artifacts(payload, engine=engine)
             if configured():
                 memory_examples = approved_examples(project_id)
                 try:
-                    ai_scenarios = generate_additional_scenarios(payload, payload["criteria"], project_memory=memory_examples)
+                    ai_scenarios = generate_additional_scenarios(
+                        payload,
+                        payload["criteria"],
+                        project_memory=memory_examples,
+                        existing_scenarios=result["scenarios"],
+                    )
                     engine = "OpenAI + local traceability guardrails"
+                    result = build_artifacts(payload, ai_scenarios=ai_scenarios, engine=engine)
                 except AIProviderError as exc:
                     warning = str(exc)
-            result = build_artifacts(payload, ai_scenarios=ai_scenarios, engine=engine)
             if warning:
                 result["aiWarning"] = warning + " Local baseline artifacts are shown instead."
             saved = save_run(project_id, payload, result)
