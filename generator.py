@@ -14,13 +14,26 @@ MEDIUM_RISK = re.compile(r"\b(login|sign in|cart|price|tax|total|account|session
 
 def parse_criteria(value: Any) -> list[dict[str, str]]:
     if isinstance(value, str):
-        lines = value.splitlines()
+        entries: list[Any] = value.splitlines()
     elif isinstance(value, list):
-        lines = [str(line) for line in value]
+        entries = value
     else:
         raise ValueError("Acceptance criteria must be a list or newline-separated text.")
     criteria: list[dict[str, str]] = []
-    for line in lines:
+    for entry in entries:
+        if isinstance(entry, dict):
+            raw_id = str(entry.get("id", "")).strip()
+            match = re.fullmatch(r"AC[-_ ]?(\d+)", raw_id, re.I)
+            if not match:
+                raise ValueError("Structured acceptance criteria need an ID such as AC-01.")
+            cid = "AC-" + match.group(1).zfill(2)
+            body = str(entry.get("text", "")).strip()
+            if not body:
+                raise ValueError(f"{cid} has no acceptance-criterion text.")
+            criteria.append({"id": cid, "text": body})
+            continue
+
+        line = str(entry)
         text = line.strip().lstrip("-•* ").strip()
         if not text:
             continue
