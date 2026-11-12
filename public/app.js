@@ -126,8 +126,10 @@ function setBusy(value) { state.busy = value; const button = $(".generate-button
 function updateMetrics() {
   const r = state.result;
   if (!r) return;
-  const risk = r.riskSummary;
-  $("#metrics").innerHTML = `<div class="metric"><span class="metric-label">CRITERIA COVERED</span><strong>${r.coverage}<small>%</small></strong><span class="metric-foot">${r.traceability.filter(x=>x.covered).length} / ${r.criteria.length} mapped</span></div><div class="metric"><span class="metric-label">RISK FLAGS</span><strong>${r.scenarios.length}</strong><span class="metric-foot">${risk.High} high · ${risk.Medium} med · ${risk.Low} low</span></div><div class="metric"><span class="metric-label">OPEN QUESTIONS</span><strong>${r.ambiguities.length}</strong><span class="metric-foot">needs clarification</span></div><div class="metric engine-metric"><span class="metric-label">GENERATOR</span><strong>${r.engine.includes("OpenAI")?"AI + rules":"Local rules"}</strong><span class="metric-foot">${r.scenarios.length} scenario drafts</span></div>`;
+  const typeOrder = ["happy path", "positive", "negative", "edge case", "boundary", "security", "accessibility", "exploratory"];
+  const types = typeOrder.map((kind) => [kind, r.scenarios.filter((s) => s.kind === kind).length]).filter(([, count]) => count);
+  const typeSummary = types.map(([kind, count]) => `${count} ${kind}`).join(" · ");
+  $("#metrics").innerHTML = `<div class="metric"><span class="metric-label">CRITERIA COVERED</span><strong>${r.coverage}<small>%</small></strong><span class="metric-foot">${r.traceability.filter(x=>x.covered).length} / ${r.criteria.length} mapped</span></div><div class="metric"><span class="metric-label">SCENARIO TYPES</span><strong>${r.scenarios.length}</strong><span class="metric-foot">${esc(typeSummary || "No scenarios yet")}</span></div><div class="metric"><span class="metric-label">OPEN QUESTIONS</span><strong>${r.ambiguities.length}</strong><span class="metric-foot">needs clarification</span></div><div class="metric engine-metric"><span class="metric-label">GENERATOR</span><strong>${r.engine.includes("OpenAI")?"AI + rules":"Local rules"}</strong><span class="metric-foot">${r.scenarios.length} scenario drafts</span></div>`;
   $("#scenario-count").textContent = r.scenarios.length;
 }
 function setTab(tab) { state.tab = tab; document.querySelectorAll(".tab").forEach((button) => { const active = button.dataset.tab === tab; button.classList.toggle("active", active); button.setAttribute("aria-selected", active ? "true" : "false"); }); }
@@ -145,9 +147,14 @@ function renderTab(r) {
 }
 function riskClass(level) { return "risk-" + level.toLowerCase(); }
 function renderOverview(r) {
-  const rows = r.scenarios.map((s) => `<tr><td><span class="trace-id">${esc(s.id)}</span><span class="scenario-sub">${s.acceptanceIds.map(esc).join(", ")}</span></td><td><span class="scenario-title">${esc(s.title)}</span><span class="scenario-sub">${esc(s.expectedResult)}</span></td><td><span class="risk-badge ${riskClass(s.risk.level)}">${esc(s.risk.level.toUpperCase())}</span><span class="scenario-sub">score ${esc(s.risk.score)}</span></td><td><span class="kind-badge">${esc(s.kind)}</span></td><td><span class="review-badge ${state.reviews[s.acceptanceIds[0]] === "approved" ? "review-approved" : state.reviews[s.acceptanceIds[0]] === "changes" ? "review-changes" : ""}">${state.reviews[s.acceptanceIds[0]] === "approved" ? "Reviewed" : state.reviews[s.acceptanceIds[0]] === "changes" ? "Needs changes" : "Pending"}</span></td></tr>`).join("");
+  const rows = r.scenarios.map((s) => {
+    const steps = (s.steps || []).map((step) => `<li>${esc(step)}</li>`).join("");
+    const preconditions = (s.preconditions || []).map((condition) => `<li>${esc(condition)}</li>`).join("");
+    const note = s.source === "local scenario design" || s.source === "ai" ? `<p class="scenario-note"><strong>Review note:</strong> ${esc(s.rationale)}</p>` : "";
+    return `<tr><td><span class="trace-id">${esc(s.id)}</span><span class="scenario-sub">${s.acceptanceIds.map(esc).join(", ")}</span></td><td><span class="scenario-title">${esc(s.title)}</span><span class="scenario-sub">${esc(s.expectedResult)}</span><details class="scenario-details"><summary>View steps and notes</summary>${preconditions ? `<strong>Before you start</strong><ul>${preconditions}</ul>` : ""}<strong>Steps</strong><ul>${steps}</ul>${note}</details></td><td><span class="risk-badge ${riskClass(s.risk.level)}">${esc(s.risk.level.toUpperCase())}</span><span class="scenario-sub">score ${esc(s.risk.score)}</span></td><td><span class="kind-badge">${esc(s.kind)}</span></td><td><span class="review-badge ${state.reviews[s.acceptanceIds[0]] === "approved" ? "review-approved" : state.reviews[s.acceptanceIds[0]] === "changes" ? "review-changes" : ""}">${state.reviews[s.acceptanceIds[0]] === "approved" ? "Reviewed" : state.reviews[s.acceptanceIds[0]] === "changes" ? "Needs changes" : "Pending"}</span></td></tr>`;
+  }).join("");
   const ambiguity = r.ambiguities.length ? `<div class="ambiguity-list">${r.ambiguities.map((a) => `<article class="ambiguity-card"><h4><span class="trace-id">${esc(a.criterionId)}</span> · ${esc(a.severity)}</h4><p>${esc(a.text)}</p>${a.reasons.map((reason) => `<p>↳ ${esc(reason)}</p>`).join("")}<p class="question">Question for the product owner: ${esc(a.question)}</p></article>`).join("")}</div>` : `<div class="empty-ambiguity">No likely ambiguity was detected by the local wording checks. Review still matters; an empty flag list is not proof that requirements are complete.</div>`;
-  return `<div class="section-caption"><h3>Risk-based scenarios</h3><span>${r.coverage}% REQUIREMENT COVERAGE</span></div><div class="table-wrap"><table class="scenario-table"><thead><tr><th>Trace</th><th>Scenario & expected result</th><th>Risk</th><th>Type</th><th>Review</th></tr></thead><tbody>${rows}</tbody></table></div><div class="section-caption section-spaced"><h3>Ambiguity check</h3><span>${r.ambiguities.length} OPEN</span></div>${ambiguity}`;
+  return `<div class="section-caption"><h3>Test scenarios</h3><span>${r.coverage}% REQUIREMENT COVERAGE · RISK SHOWN PER CASE</span></div><div class="table-wrap"><table class="scenario-table"><thead><tr><th>Trace</th><th>Scenario & expected result</th><th>Risk</th><th>Type</th><th>Review</th></tr></thead><tbody>${rows}</tbody></table></div><div class="section-caption section-spaced"><h3>Questions to clarify</h3><span>${r.ambiguities.length} OPEN</span></div>${ambiguity}`;
 }
 function renderReview(r) {
   const statuses = Object.values(state.reviews); const approved = statuses.filter(x=>x==="approved").length; const changes=statuses.filter(x=>x==="changes").length;
@@ -164,8 +171,14 @@ function currentText() {
 function markdown(r) {
   const lines = [`# QA Scenario Draft: ${r.feature}`, "", `**Product:** ${r.product}  `, `**Target:** ${r.url}  `, `**Generator:** ${r.engine}  `, `**Coverage:** ${r.coverage}%`, "", "## Acceptance criteria & traceability"];
   for (const t of r.traceability) lines.push(`- **${t.criterionId}** — ${t.criterion} → ${t.scenarioIds.join(", ") || "uncovered"}`);
-  lines.push("", "## Risk-based scenarios");
-  for (const s of r.scenarios) lines.push(`### ${s.id}: ${s.title}`, `- Risk: ${s.risk.level} (${s.risk.score}) — ${s.risk.rationale}`, `- Covers: ${s.acceptanceIds.join(", ")}`, `- Expected: ${s.expectedResult}`, "");
+  lines.push("", "## Test scenarios");
+  for (const s of r.scenarios) {
+    lines.push(`### ${s.id}: ${s.title}`, `- Type: ${s.kind}`, `- Risk: ${s.risk.level} (${s.risk.score}) — ${s.risk.rationale}`, `- Covers: ${s.acceptanceIds.join(", ")}`, `- Expected: ${s.expectedResult}`);
+    if (s.preconditions?.length) lines.push("- Before you start:", ...s.preconditions.map((item) => `  - ${item}`));
+    if (s.steps?.length) lines.push("- Steps:", ...s.steps.map((item, i) => `  ${i + 1}. ${item}`));
+    if (s.source === "local scenario design" || s.source === "ai") lines.push(`- Review note: ${s.rationale}`);
+    lines.push("");
+  }
   lines.push("## Ambiguities to clarify");
   if (r.ambiguities.length) for (const a of r.ambiguities) lines.push(`- **${a.criterionId}:** ${a.question}`);
   else lines.push("- No likely ambiguity flagged by local wording checks. Human review still required.");
