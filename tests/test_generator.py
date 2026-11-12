@@ -23,6 +23,13 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(len(result["scenarios"]), 3)
         self.assertTrue(all(row["covered"] for row in result["traceability"]))
 
+    def test_preparsed_criteria_can_be_analyzed_again(self):
+        parsed = parse_criteria(self.payload["criteria"])
+        result = build_artifacts({**self.payload, "criteria": parsed})
+        self.assertEqual(result["criteria"], parsed)
+        self.assertIn("The cart shows each selected product", result["scenarios"][0]["title"])
+        self.assertNotIn("{'id':", result["scenarios"][0]["title"])
+
     def test_vague_validation_is_flagged(self):
         criteria = parse_criteria(["AC-01 | Required fields are validated."])
         flags = analyze_ambiguity(criteria)
