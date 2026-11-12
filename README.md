@@ -27,7 +27,8 @@ Then open <http://127.0.0.1:8000>. A SauceDemo checkout example is ready to use.
 
 - Each generated plan is saved in the selected project.
 - Review choices are saved too. You can open an older plan later.
-- Use **Export project** to save the memory as a JSON file. Use **Import project** to load that file on another copy of the app.
+- Use **Back up plans** to save every plan and review in the selected project to one file. Use **Load backup** to make a new project copy from that file.
+- Use **Download plan + code** to get a readable file for the plan you are looking at now. It includes the test cases and code drafts.
 - The database stays on this computer. This demo does not sync projects between people. Team sharing needs a shared server and sign-in.
 - The database file is not added to GitHub.
 
