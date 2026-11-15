@@ -1,4 +1,4 @@
-const state = { result: null, tab: "overview", reviews: {}, busy: false, currentRunId: null, currentProjectId: localStorage.getItem("scenarioStudioProject") || "" };
+const state = { result: null, tab: "overview", reviews: {}, busy: false, demoMode: false, currentRunId: null, currentProjectId: localStorage.getItem("scenarioStudioProject") || "" };
 const $ = (selector) => document.querySelector(selector);
 const form = $("#brief-form");
 const criteriaInput = $("#criteria");
@@ -37,7 +37,7 @@ function clearCurrentResult() {
   state.result = null; state.reviews = {}; state.currentRunId = null; state.tab = "overview";
   $("#results-title").textContent = "Your reviewable output";
   $("#copy-output").disabled = true; $("#export-output").disabled = true;
-  output.innerHTML = `<div class="empty-state"><div class="empty-icon">✳</div><h3>Make the requirements testable.</h3><p>Start with the sample or enter a synthetic story. Saved plans stay in the selected project.</p><div class="empty-flow"><span>Story</span><b>→</b><span>Scenarios</span><b>→</b><span>Saved memory</span></div></div>`;
+  output.innerHTML = `<div class="empty-state"><div class="empty-icon">✳</div><h3>Make the requirements testable.</h3><p>Start with the sample or enter a synthetic story. ${state.demoMode ? "Download the plan before you leave; this demo does not save it." : "Saved plans stay in the selected project."}</p><div class="empty-flow"><span>Story</span><b>→</b><span>Scenarios</span><b>→</b><span>${state.demoMode ? "Review" : "Saved memory"}</span></div></div>`;
 }
 
 async function loadRun(runId) {
@@ -96,8 +96,13 @@ async function loadExample() {
 async function refreshStatus() {
   try {
     const response = await fetch("/api/status"); const info = await response.json();
-    $("#engine-status").textContent = info.aiConfigured ? "AI + GUARDRAILS" : "LOCAL DEMO";
-    $("#engine-caption").textContent = info.aiConfigured ? "AI mode sends this brief and approved project examples to OpenAI." : "Local rules mode · saved project stays on this computer";
+    state.demoMode = Boolean(info.demoMode);
+    document.body.classList.toggle("demo-mode", state.demoMode);
+    $(".privacy-note").innerHTML = state.demoMode
+      ? '<span class="lock-icon">◇</span><span><strong>Public demo: use sample information only.</strong> Your brief is used to make this plan and is not saved. Do not enter private or work information.</span>'
+      : '<span class="lock-icon">◇</span><span><strong>Save project work safely.</strong> Plans and reviews are saved in the selected project on this computer. Only use information you are allowed to store here.</span>';
+    $("#engine-status").textContent = state.demoMode ? "PUBLIC DEMO" : info.aiConfigured ? "AI + GUARDRAILS" : "LOCAL DEMO";
+    $("#engine-caption").textContent = state.demoMode ? "Local rules · no sign-in, AI key, or saved data" : info.aiConfigured ? "AI mode sends this brief and approved project examples to OpenAI." : "Local rules mode · saved project stays on this computer";
     $(".pulse-dot").style.background = info.aiConfigured ? "#8978bd" : "#54a982";
   } catch { $("#engine-status").textContent = "LOCAL DEMO"; }
 }
@@ -118,7 +123,7 @@ async function generate(event) {
     $("#copy-output").disabled = false; $("#export-output").disabled = false;
     updateMetrics(); setTab("overview"); render();
     await loadHistory();
-    if (result.aiWarning) notify(result.aiWarning); else notify(`Plan saved as v${result.memory.version}`);
+    if (result.aiWarning) notify(result.aiWarning); else if (result.demoMode) notify("Plan ready. This public demo does not save it."); else notify(`Plan saved as v${result.memory.version}`);
   } catch (error) { notify(error.message); }
   finally { setBusy(false); }
 }
@@ -141,7 +146,7 @@ function render() {
 }
 function renderTab(r) {
   if (state.tab === "gherkin") return `<div class="section-caption"><h3>Feature file draft</h3><span>${r.scenarios.length} SCENARIOS · ${r.criteria.length} CRITERIA</span></div><div class="code-block"><span class="code-lang">GHERKIN</span><pre>${esc(r.gherkin)}</pre></div>`;
-  if (state.tab === "cypress") return `<div class="notice">Starting point only. The studio does not crawl the target. Review locators, preconditions, and product rules before running.</div><div class="section-caption"><h3>Cypress spec skeleton</h3><span>JAVASCRIPT</span></div><div class="code-block"><span class="code-lang">CYPRESS</span><pre>${esc(r.cypress)}</pre></div>`;
+  if (state.tab === "cypress") return `<div class="notice">Code draft only. Every generated test is skipped. Add your team's page objects, selectors, test data, login setup, action steps, and assertions; review the code before enabling it. This studio does not run tests or crawl the site.</div><div class="section-caption"><h3>Cypress spec skeleton</h3><span>JAVASCRIPT</span></div><div class="code-block"><span class="code-lang">CYPRESS</span><pre>${esc(r.cypress)}</pre></div>`;
   if (state.tab === "review") return renderReview(r);
   return renderOverview(r);
 }
