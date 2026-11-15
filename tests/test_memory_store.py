@@ -39,7 +39,8 @@ class MemoryStoreTests(unittest.TestCase):
         self.assertEqual(memory_store.approved_examples(self.project["id"]), [])
         memory_store.save_reviews(saved["runId"], {"AC-01": "approved"})
         examples = memory_store.approved_examples(self.project["id"])
-        self.assertEqual(len(examples), 1)
+        self.assertEqual(len(examples), len(self.result["scenarios"]))
+        self.assertTrue(all(example["criteria"][0]["id"] == "AC-01" for example in examples))
         self.assertEqual(examples[0]["criteria"][0]["id"], "AC-01")
 
     def test_project_export_and_import_keep_plans_and_reviews(self):
