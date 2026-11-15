@@ -27,6 +27,8 @@ from memory_store import (
 
 ROOT = Path(__file__).resolve().parent
 PUBLIC = (ROOT / "public").resolve()
+DEMO_MODE = os.environ.get("DEMO_MODE", "0").lower() in {"1", "true", "yes"}
+DEMO_PROJECT = {"id": "public-demo", "name": "Public demo"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -35,22 +37,29 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/api/status":
-            self._json(200, {"aiConfigured": configured(), "mode": "AI + deterministic guardrails" if configured() else "Local rules demo", "site": "SauceDemo"})
+            ai_enabled = configured() and not DEMO_MODE
+            self._json(200, {"aiConfigured": ai_enabled, "demoMode": DEMO_MODE, "mode": "AI + deterministic guardrails" if ai_enabled else "Public demo · nothing is saved" if DEMO_MODE else "Local rules demo", "site": "SauceDemo"})
             return
         if path == "/api/evaluate":
             self._json(200, run_evaluation())
             return
         if path == "/api/projects":
-            self._json(200, {"projects": list_projects()})
+            self._json(200, {"projects": [DEMO_PROJECT] if DEMO_MODE else list_projects()})
             return
         parts = [part for part in path.split("/") if part]
         if len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] == "runs":
+            if DEMO_MODE:
+                self._json(200, {"runs": []} if parts[2] == DEMO_PROJECT["id"] else {"error": "Project not found."})
+                return
             if not get_project(parts[2]):
                 self._json(404, {"error": "Project not found."})
                 return
             self._json(200, {"runs": list_runs(parts[2])})
             return
         if len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] == "export":
+            if DEMO_MODE:
+                self._json(403, {"error": "Project backups are not available in the public demo."})
+                return
             bundle = export_project(parts[2])
             if bundle is None:
                 self._json(404, {"error": "Project not found."})
@@ -58,6 +67,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, bundle)
             return
         if len(parts) == 3 and parts[:2] == ["api", "runs"]:
+            if DEMO_MODE:
+                self._json(404, {"error": "Saved plans are not available in the public demo."})
+                return
             run = get_run(parts[2])
             if run is None:
                 self._json(404, {"error": "Saved plan not found."})
@@ -97,14 +109,23 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("The request must be a JSON object.")
             if path == "/api/projects":
+                if DEMO_MODE:
+                    self._json(403, {"error": "Project memory is turned off in the public demo."})
+                    return
                 project = create_project(payload.get("name", ""))
                 self._json(201, {"project": project})
                 return
             if path == "/api/projects/import":
+                if DEMO_MODE:
+                    self._json(403, {"error": "Project memory is turned off in the public demo."})
+                    return
                 project = import_project(payload)
                 self._json(201, {"project": project})
                 return
             if is_review_update:
+                if DEMO_MODE:
+                    self._json(403, {"error": "Reviews are not saved in the public demo."})
+                    return
                 reviews = payload.get("reviews", {})
                 if not isinstance(reviews, dict):
                     raise ValueError("Reviews must be an object with criterion statuses.")
@@ -118,7 +139,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(str(payload.get("product", ""))) > 120 or len(str(payload.get("feature", ""))) > 120:
                 raise ValueError("Product and feature names must be under 120 characters.")
             project_id = str(payload.get("projectId", DEFAULT_PROJECT_ID))
-            project = get_project(project_id)
+            project = (DEMO_PROJECT if project_id == DEMO_PROJECT["id"] else None) if DEMO_MODE else get_project(project_id)
             if project is None:
                 raise ValueError("Choose a saved project before generating a plan.")
             payload["projectId"] = project_id
@@ -128,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
             warning = None
             memory_examples = []
             result = build_artifacts(payload, engine=engine)
-            if configured():
+            if configured() and not DEMO_MODE:
                 memory_examples = approved_examples(project_id)
                 try:
                     ai_scenarios = generate_additional_scenarios(
@@ -143,8 +164,12 @@ class Handler(BaseHTTPRequestHandler):
                     warning = str(exc)
             if warning:
                 result["aiWarning"] = warning + " Local baseline artifacts are shown instead."
-            saved = save_run(project_id, payload, result)
-            result["memory"] = {**saved, "projectName": project["name"], "approvedExamplesShared": len(memory_examples) if configured() and not warning else 0}
+            if DEMO_MODE:
+                result["memory"] = {"runId": None, "version": None, "projectName": project["name"], "approvedExamplesShared": 0}
+                result["demoMode"] = True
+            else:
+                saved = save_run(project_id, payload, result)
+                result["memory"] = {**saved, "projectName": project["name"], "approvedExamplesShared": len(memory_examples) if configured() and not warning else 0}
             self._json(200, result)
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._json(400, {"error": "Request body must be valid UTF-8 JSON."})

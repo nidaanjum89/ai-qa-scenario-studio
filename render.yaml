@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ai-qa-scenario-studio-demo
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: "true"
+    startCommand: "python3 app.py"
+    autoDeployTrigger: off
+    healthCheckPath: /api/status
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: DEMO_MODE
+        value: "1"

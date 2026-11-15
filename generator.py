@@ -15,6 +15,9 @@ WARDROBE_TERMS = re.compile(r"\b(wardrobe|clothing|apparel|garment|shirt|pant|sc
 CLOTHING_EXAMPLES = re.compile(r"\b(shirts?|pants?|scarves?|trousers?|jeans)\b", re.I)
 CLASSIFICATION_TERMS = re.compile(r"\b(classif(?:y|ies|ication)|categor(?:y|ize|ies|ized)|detect|recogniz|auto[- ]?fill|autofill|color|style)\b", re.I)
 SAVE_TERMS = re.compile(r"\b(save|saved|store|persist)\b", re.I)
+ORDER_TERMS = re.compile(r"\b(checkout|shopping cart|cart|purchase|place an order|submit order)\b", re.I)
+SEARCH_TERMS = re.compile(r"\b(search|filter|sort)\b", re.I)
+FORM_TERMS = re.compile(r"\b(form|profile|register|registration|settings|field|input|edit details)\b", re.I)
 
 
 def parse_criteria(value: Any) -> list[dict[str, str]]:
@@ -195,6 +198,163 @@ def _wardrobe_photo_scenarios(criteria: list[dict[str, str]], story: str, featur
     return scenarios
 
 
+def _planned_scenario(
+    title: str,
+    acceptance_ids: list[str],
+    kind: str,
+    preconditions: list[str],
+    steps: list[str],
+    expected: str,
+    rationale: str,
+    risk: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "id": "", "title": title, "acceptanceIds": list(dict.fromkeys(acceptance_ids)),
+        "kind": kind, "risk": risk, "preconditions": preconditions, "steps": steps,
+        "expectedResult": expected, "rationale": rationale, "source": "local scenario design",
+    }
+
+
+def _checkout_scenarios(criteria: list[dict[str, str]], context: str) -> list[dict[str, Any]]:
+    if not ORDER_TERMS.search(context):
+        return []
+    all_ids = [item["id"] for item in criteria]
+    cart_ids = [item["id"] for item in criteria if re.search(r"\b(cart|item|product|price)\b", item["text"], re.I)] or all_ids
+    validation_ids = [item["id"] for item in criteria if VALIDATION_TERMS.search(item["text"]) or ERROR_TERMS.search(item["text"])]
+    amount_ids = [item["id"] for item in criteria if re.search(r"\b(price|tax|total|subtotal|amount|currency)\b", item["text"], re.I)]
+    risk = risk_for(" ".join(item["text"] for item in criteria))
+    scenarios = [
+        _planned_scenario(
+            "Happy path: complete checkout with one selected product", all_ids, "happy path",
+            ["Use a test account and synthetic product and customer details."],
+            ["Add one known product to the cart.", "Check the product and price in the cart.", "Enter valid checkout details.", "Complete checkout and review the result."],
+            "The order completes and each stated checkout criterion holds. Check for confirmation if the requirements define one.",
+            "The requirements describe checkout; review any missing confirmation or post-order rules with the product owner.", risk,
+        ),
+        _planned_scenario(
+            "Positive: keep product and price details consistent through checkout", cart_ids, "positive",
+            ["Use a test account and one product with known synthetic data."],
+            ["Add the product to the cart.", "Compare its name and price in the cart with the product page.", "Continue to checkout and compare the displayed details again."],
+            "The product details stay consistent with the supplied acceptance criteria.",
+            "Use agreed product and price examples; the rules for discounts or price changes may need clarification.", risk,
+        ),
+    ]
+    if validation_ids:
+        scenarios.append(_planned_scenario(
+            "Negative: leave a required checkout field empty", validation_ids, "negative",
+            ["Use a test account and a prepared cart."],
+            ["Open checkout.", "Leave one required field empty.", "Try to continue and read the result."],
+            "Checkout is blocked and the required field error described by the acceptance criteria appears.",
+            "The exact behavior is based on the validation requirement. Confirm how multiple empty fields are reported.", risk,
+        ))
+    scenarios.append(_planned_scenario(
+        "Edge case: submit checkout twice after a slow response", all_ids, "edge case",
+        ["Use a test account and a prepared cart in a safe test environment."],
+        ["Submit checkout once.", "Before the result appears, submit again or retry the action.", "Check the order history and confirmation."],
+        "Confirm the intended rule: a retry should not create an unintended duplicate order.",
+        "Exploratory case. The brief does not define repeat-submit or retry behavior.", risk,
+    ))
+    if amount_ids:
+        scenarios.append(_planned_scenario(
+            "Boundary: check totals near a rounding point", amount_ids, "boundary",
+            ["Use approved synthetic prices that produce a value near the currency rounding point."],
+            ["Add the item to the cart.", "Check subtotal, tax, and total at the cart and checkout steps.", "Compare each value with the approved formula and rounding rule."],
+            "Each amount matches the agreed formula, currency, and rounding rule.",
+            "Confirm the calculation rules and test values with the product owner before using this case.", risk,
+        ))
+    return scenarios
+
+
+def _search_scenarios(criteria: list[dict[str, str]], context: str) -> list[dict[str, Any]]:
+    if not SEARCH_TERMS.search(context):
+        return []
+    all_ids = [item["id"] for item in criteria]
+    search_ids = [item["id"] for item in criteria if re.search(r"\b(search|query|results?)\b", item["text"], re.I)] or all_ids
+    filter_ids = [item["id"] for item in criteria if re.search(r"\b(filter|sort)\b", item["text"], re.I)] or search_ids
+    risk = risk_for(" ".join(item["text"] for item in criteria))
+    return [
+        _planned_scenario(
+            "Happy path: find a known item", search_ids, "happy path",
+            ["Use a synthetic catalogue with a known matching item."],
+            ["Enter a word that matches the known item.", "Submit the search.", "Open a result and compare it with the catalogue."],
+            "The results include the expected matching item and follow the supplied search rules.",
+            "Agree on a small set of sample items and expected matches before review.", risk,
+        ),
+        _planned_scenario(
+            "Positive: combine search with a filter or sort", filter_ids, "positive",
+            ["Use a synthetic catalogue with items that match and do not match the selected filter."],
+            ["Search for a known item group.", "Apply a filter or sort option.", "Check the visible results and their order."],
+            "Only items that meet the selected search and filter rules appear, in the expected order.",
+            "Confirm how combined filters and sort options should work if the brief does not say.", risk,
+        ),
+        _planned_scenario(
+            "Negative: search for text with no matches", search_ids, "negative",
+            ["Use a synthetic catalogue that has no item matching the search text."],
+            ["Enter a search term that has no match.", "Submit the search and review the empty result."],
+            "The app shows a clear no-results state. Confirm the wording and recovery action with the product owner.",
+            "Exploratory case. The brief does not define the no-results message or recovery path.", risk,
+        ),
+        _planned_scenario(
+            "Edge case: clear search and filters", filter_ids, "edge case",
+            ["Start with a synthetic catalogue and a known active search or filter."],
+            ["Apply a search and filter.", "Clear the search and remove the filter.", "Compare the restored list with the starting list."],
+            "The result list returns to the expected unfiltered state.",
+            "Confirm whether clearing search also clears filters and sort order.", risk,
+        ),
+    ]
+
+
+def _form_scenarios(criteria: list[dict[str, str]], context: str) -> list[dict[str, Any]]:
+    if not FORM_TERMS.search(context) or ORDER_TERMS.search(context) or SEARCH_TERMS.search(context):
+        return []
+    all_ids = [item["id"] for item in criteria]
+    validation_ids = [item["id"] for item in criteria if VALIDATION_TERMS.search(item["text"]) or ERROR_TERMS.search(item["text"])]
+    risk = risk_for(" ".join(item["text"] for item in criteria))
+    negative_ids = validation_ids or all_ids
+    negative_expected = (
+        "The form blocks the invalid submission and shows the error defined by the acceptance criteria."
+        if validation_ids else
+        "Confirm which invalid value should be rejected and what the user should see."
+    )
+    negative_note = (
+        "Check that the message and blocked action match the requirement."
+        if validation_ids else
+        "Exploratory case. The brief does not define invalid input or the expected response."
+    )
+    return [
+        _planned_scenario(
+            "Happy path: complete the form with valid details", all_ids, "happy path",
+            ["Use a test account and synthetic details."],
+            ["Open the form.", "Enter valid details for each required field.", "Submit the form.", "Review the saved or confirmed result."],
+            "The form completes and each stated acceptance criterion holds.",
+            "Use only approved synthetic values and confirm which fields are required.", risk,
+        ),
+        _planned_scenario(
+            "Negative: submit the form with an invalid or missing value", negative_ids, "negative",
+            ["Use synthetic details in a safe test environment."],
+            ["Leave a required field empty or enter a value that violates the stated rule.", "Submit the form.", "Review the error and whether the data was saved."],
+            negative_expected, negative_note, risk,
+        ),
+        _planned_scenario(
+            "Boundary: check values at the allowed field limits", all_ids, "boundary",
+            ["Confirm the allowed minimum and maximum values with the product owner."],
+            ["Try a value at the minimum limit.", "Try a value at the maximum limit.", "Try one value just outside each limit."],
+            "Values at the limits follow the stated rule; values outside them get the defined response.",
+            "The brief does not provide field limits. Set them before treating this as an assertion.", risk,
+        ),
+    ]
+
+
+def _local_scenarios(criteria: list[dict[str, str]], story: str, feature: str) -> list[dict[str, Any]]:
+    context = " ".join([story, feature, *(item["text"] for item in criteria)])
+    scenarios: list[dict[str, Any]] = []
+    scenarios.extend(_wardrobe_photo_scenarios(criteria, story, feature))
+    scenarios.extend(_checkout_scenarios(criteria, context))
+    scenarios.extend(_search_scenarios(criteria, context))
+    scenarios.extend(_form_scenarios(criteria, context))
+    return scenarios
+
+
 def _assign_local_ids(scenarios: list[dict[str, Any]], existing: set[str]) -> list[dict[str, Any]]:
     next_id = 1
     for scenario in scenarios:
@@ -286,7 +446,7 @@ def build_artifacts(payload: dict[str, Any], ai_scenarios: list[dict[str, Any]] 
     url = str(payload.get("url", "")).strip()[:300]
     story = str(payload.get("story", "")).strip()[:2000]
     baseline = [_scenario_for(item, feature) for item in criteria]
-    local_additions = _assign_local_ids(_wardrobe_photo_scenarios(criteria, story, feature), {scenario["id"] for scenario in baseline})
+    local_additions = _assign_local_ids(_local_scenarios(criteria, story, feature), {scenario["id"] for scenario in baseline})
     allowed = {item["id"] for item in criteria}
     extras: list[dict[str, Any]] = []
     for raw in (ai_scenarios or [])[:8]:

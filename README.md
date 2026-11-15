@@ -1,64 +1,60 @@
 # AI QA Scenario Studio
 
-This demo helps turn a feature idea into a QA plan. It uses a sample shop called SauceDemo.
+This small demo turns a user story and acceptance criteria into a QA plan. It can suggest happy paths, positive checks, negative cases, and edge cases.
 
-## What it does
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/nidaanjum89/ai-qa-scenario-studio)
 
-1. Add a user story and its acceptance criteria.
-2. Generate happy paths, positive checks, negative cases, and edge cases where the brief gives enough clues.
-3. Review unclear wording and possible risks.
-4. Mark each criterion as reviewed or needing changes.
-5. View the scenarios as Gherkin or a Cypress code draft.
-6. Save plans and reviews in a project memory on this computer.
+## Sample output
 
-The main goal is test planning. The Cypress code is only a starting point.
+This preview uses the included checkout sample. Your scenarios can be different.
 
-## Try it
+![Illustration of the checkout sample plan](scenario-studio-demo.svg)
+
+The public demo uses local rules. It does not need an account or AI key, and it does not save the information you enter. Download the plan before you leave. Use sample information only.
+
+## Run it on your computer
 
 You need Python 3.10 or newer. No extra packages are needed.
 
-```bash
-python3 app.py
-```
+1. Open a terminal in this folder.
+2. Run `python3 app.py`.
+3. Open <http://127.0.0.1:8000>.
 
-Then open <http://127.0.0.1:8000>. A SauceDemo checkout example is ready to use.
+The sample shop example is ready when the page opens.
 
-## Project memory
+## How to use it
 
-- Each generated plan is saved in the selected project.
-- Review choices are saved too. You can open an older plan later.
-- Use **Back up plans** to save every plan and review in the selected project to one file. Use **Load backup** to make a new project copy from that file.
-- Use **Download plan + code** to get a readable file for the plan you are looking at now. It includes the test cases and code drafts.
-- The database stays on this computer. This demo does not sync projects between people. Team sharing needs a shared server and sign-in.
-- The database file is not added to GitHub.
+1. Enter a user story and one acceptance criterion on each line.
+2. Select **Generate QA artifacts**.
+3. Review the scenario list, unclear questions, Gherkin, and Cypress draft.
+4. Download the plan and code if you want to keep a copy.
 
-## Important to know
+The rules include examples for checkout, product search, forms, and the clothing-photo flow. These are suggestions based on the words in your brief. Read every case and correct it for the real product.
 
-- This demo does not run tests against SauceDemo or check that results match the real site.
-- The Cypress draft is basic. Its tests are skipped until someone reviews and completes them. Fit the code to your team's page objects, test data, login setup, and selectors before using it.
-- Local scenario ideas use simple rules. For example, a clothing-photo flow gets cases for a clear photo, common clothing types, an unclear photo, more than one item, and checking a saved item again.
-- Cases for behavior the brief does not explain are marked for review. They are questions to discuss, not facts about the real product.
-- Risk and unclear-wording checks use simple rules. They can miss things.
-- Only approved examples from the selected project can be shared with the AI for future suggestions. Review an example before approving it.
+## About the Cypress draft
 
-## Optional AI suggestions
+The Cypress output is a draft, not a ready-to-run test suite. Every generated test is skipped. Before using it, add the team's page objects or commands, selectors, test data, login setup, actions, and checks. Then review the test and enable it yourself.
 
-The demo works without an AI key. It uses local rules and flow-specific examples in that mode.
+The studio does not open the target website, find selectors, or run tests.
 
-To ask an OpenAI model for extra ideas, set your API key before starting the app:
+## Project memory on your computer
 
-```bash
-export OPENAI_API_KEY="your-key"
-python3 app.py
-```
+When you run the app on your own computer, it saves plans and reviews in a local project. You can back up the project or load a backup later. The public demo does not save project memory.
 
-When AI suggestions are on, the current brief and approved examples from the selected project are sent to the OpenAI API. The AI is asked to add useful happy, positive, negative, or edge cases without repeating the local scenarios. Use sample information only. Do not enter employer, customer, personal, or confidential data.
+## Optional AI ideas
 
-## Checks
+The app works without AI. If you add an OpenAI API key, the local app can request extra ideas. The current story and approved examples are sent to OpenAI for that request. Use sample information only; do not enter private, employer, customer, or confidential details.
+
+## What this demo can and cannot tell you
+
+- It shows how requirements can be turned into reviewable test ideas.
+- It flags some unclear wording, but the simple rules can miss things.
+- Its risk labels and scenario coverage do not prove that a product is safe or fully tested.
+- The evaluation uses five sample briefs. It checks the app's rules, not real-world QA quality or AI accuracy.
+
+To run the checks:
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 evaluate.py
 ```
-
-Unit tests check that the app's own rules and memory work. The evaluation uses five sample briefs. These checks do not measure real-world QA quality or AI accuracy.
