@@ -2,6 +2,10 @@
 
 This small demo turns a user story and acceptance criteria into a QA plan. It can suggest happy paths, positive checks, negative cases, and edge cases.
 
+**Live demo:** [Open AI QA Scenario Studio](https://ai-qa-scenario-studio-demo.onrender.com/)
+
+
+
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/nidaanjum89/ai-qa-scenario-studio)
 
 ## Sample output
